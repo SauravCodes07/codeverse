@@ -4,17 +4,11 @@
 // Framework: Express.js + gRPC
 // ============================================================================
 
+import { randomUUID } from 'crypto';
 import express, { Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import * as grpc from '@grpc/grpc-js';
-import * as protoLoader from '@grpc/proto-loader';
 import { Pool } from 'pg';
 import Redis from 'ioredis';
-import AWS from 'aws-sdk';
-import { EventEmitter } from 'events';
-import * as fs from 'fs/promises';
 import * as path from 'path';
-import axios from 'axios';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -178,15 +172,11 @@ class AntigravityRouter {
   private app: express.Application;
   private db: Pool;
   private redis: Redis;
-  private s3: AWS.S3;
   private executionQueue: Map<string, ExecutionResult>;
-  private grpcClient: any;
-  private eventEmitter: EventEmitter;
 
   constructor() {
     this.app = express();
     this.executionQueue = new Map();
-    this.eventEmitter = new EventEmitter();
 
     // Initialize PostgreSQL
     this.db = new Pool({
@@ -199,13 +189,6 @@ class AntigravityRouter {
     this.redis = new Redis({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
-    });
-
-    // Initialize AWS S3
-    this.s3 = new AWS.S3({
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-      region: process.env.AWS_REGION || 'us-east-1',
     });
 
     this.setupMiddleware();
@@ -237,7 +220,7 @@ class AntigravityRouter {
   }
 
   private async handleExecution(req: Request, res: Response): Promise<void> {
-    const executionId = uuidv4();
+    const executionId = randomUUID();
     const payload: ExecutionPayload = req.body;
 
     try {

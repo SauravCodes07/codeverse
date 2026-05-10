@@ -3,7 +3,7 @@ import Editor from '@monaco-editor/react';
 import axios, { AxiosInstance } from 'axios';
 import { io, Socket } from 'socket.io-client';
 import create from 'zustand';
-import { Xterm } from 'xterm';
+import { Terminal } from 'xterm';
 import 'xterm/css/xterm.css';
 
 // ============================================================================
@@ -155,13 +155,13 @@ class CodeVerseAPI {
 
 const TerminalComponent: React.FC = () => {
   const terminalRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<Xterm | null>(null);
+  const xtermRef = useRef<Terminal | null>(null);
   const { terminalOutput } = useStore();
 
   useEffect(() => {
     if (!terminalRef.current) return;
 
-    const xterm = new Xterm({
+    const terminal = new Terminal({
       theme: {
         background: '#1e1e1e',
         foreground: '#d4d4d4',
@@ -170,11 +170,11 @@ const TerminalComponent: React.FC = () => {
       lineHeight: 1.5,
     });
 
-    xterm.open(terminalRef.current);
-    xtermRef.current = xterm;
+    terminal.open(terminalRef.current);
+    xtermRef.current = terminal;
 
     return () => {
-      xterm.dispose();
+      terminal.dispose();
     };
   }, []);
 

@@ -1,0 +1,585 @@
+-- ============================================================================
+-- CodeVerse: Production-Grade PostgreSQL Schema
+-- Database: codeverse_prod
+-- Version: 1.0.0
+-- Last Updated: 2026-05-10
+-- ============================================================================
+
+-- ============================================================================
+-- EXTENSIONS
+-- ============================================================================
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- ============================================================================
+-- CORE IDENTITY & AUTHENTICATION
+-- ============================================================================
+
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    full_name VARCHAR(255),
+    username VARCHAR(100) NOT NULL UNIQUE,
+    avatar_url TEXT,
+    bio TEXT,
+    
+    auth_provider VARCHAR(50) NOT NULL DEFAULT 'email',
+    provider_id VARCHAR(255),
+    password_hash VARCHAR(255),
+    password_reset_token VARCHAR(500),
+    password_reset_expires_at TIMESTAMP,
+    email_verified BOOLEAN DEFAULT FALSE,
+    email_verified_at TIMESTAMP,
+    
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    last_login_at TIMESTAMP,
+    deleted_at TIMESTAMP,
+    
+    metadata JSONB DEFAULT '{}'
+);
+
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX idx_users_provider ON users(auth_provider, provider_id);
+
+-- Sessions & API tokens
+CREATE TABLE sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    access_token VARCHAR(1000) NOT NULL UNIQUE,
+    refresh_token VARCHAR(1000) NOT NULL UNIQUE,
+    token_type VARCHAR(50) DEFAULT 'Bearer',
+    scope VARCHAR(500),
+    expires_at TIMESTAMP NOT NULL,
+    refresh_expires_at TIMESTAMP NOT NULL,
+    ip_address INET,
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    revoked_at TIMESTAMP
+);
+
+CREATE INDEX idx_sessions_user ON sessions(user_id);
+CREATE INDEX idx_sessions_access_token ON sessions(access_token);
+CREATE INDEX idx_sessions_expires ON sessions(expires_at) WHERE revoked_at IS NULL;
+
+-- ============================================================================
+-- WORKSPACE & FILE MANAGEMENT
+-- ============================================================================
+
+CREATE TABLE workspaces (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL UNIQUE,
+    description TEXT,
+    is_public BOOLEAN DEFAULT FALSE,
+    
+    root_path VARCHAR(500),
+    total_files INTEGER DEFAULT 0,
+    total_size_bytes BIGINT DEFAULT 0,
+    
+    max_collaborators INTEGER DEFAULT 5,
+    max_size_bytes BIGINT DEFAULT 5368709120,
+    
+    git_repo_url TEXT,
+    git_branch VARCHAR(255) DEFAULT 'main',
+    last_synced_at TIMESTAMP,
+    
+    language_primary VARCHAR(50),
+    tags VARCHAR(500)[] DEFAULT '{}',
+    is_template BOOLEAN DEFAULT FALSE,
+    template_version VARCHAR(50),
+    
+    is_archived BOOLEAN DEFAULT FALSE,
+    archived_at TIMESTAMP,
+    
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_workspaces_owner ON workspaces(owner_id);
+CREATE INDEX idx_workspaces_public ON workspaces(is_public) WHERE is_public = TRUE;
+CREATE INDEX idx_workspaces_slug ON workspaces(slug);
+
+-- Workspace collaborators
+CREATE TABLE workspace_collaborators (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL,
+    invited_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    invited_at TIMESTAMP DEFAULT NOW(),
+    joined_at TIMESTAMP,
+    permissions JSONB DEFAULT '{}',
+    
+    UNIQUE(workspace_id, user_id)
+);
+
+CREATE INDEX idx_collaborators_user ON workspace_collaborators(user_id);
+CREATE INDEX idx_collaborators_workspace ON workspace_collaborators(workspace_id);
+
+-- Files
+CREATE TABLE files (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    parent_id UUID REFERENCES files(id) ON DELETE CASCADE,
+    
+    name VARCHAR(255) NOT NULL,
+    path VARCHAR(1000) NOT NULL,
+    file_type VARCHAR(50) NOT NULL,
+    language VARCHAR(50),
+    mime_type VARCHAR(100),
+    
+    size_bytes BIGINT DEFAULT 0,
+    content_hash VARCHAR(64),
+    s3_key VARCHAR(500),
+    is_binary BOOLEAN DEFAULT FALSE,
+    encoding VARCHAR(50) DEFAULT 'utf-8',
+    
+    is_executable BOOLEAN DEFAULT FALSE,
+    is_readonly BOOLEAN DEFAULT FALSE,
+    last_modified_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    deleted_at TIMESTAMP,
+    
+    UNIQUE(workspace_id, path)
+);
+
+CREATE INDEX idx_files_workspace ON files(workspace_id);
+CREATE INDEX idx_files_parent ON files(parent_id);
+CREATE INDEX idx_files_path ON files(workspace_id, path);
+CREATE INDEX idx_files_language ON files(language);
+
+-- File versions
+CREATE TABLE file_versions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    version_number INTEGER NOT NULL,
+    content_length BIGINT,
+    change_summary VARCHAR(500),
+    
+    yjs_state BYTEA,
+    clock_vector JSONB,
+    
+    created_by_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    
+    commit_hash VARCHAR(64),
+    commit_message TEXT,
+    
+    UNIQUE(file_id, version_number)
+);
+
+CREATE INDEX idx_versions_file ON file_versions(file_id);
+CREATE INDEX idx_versions_created ON file_versions(created_at);
+
+-- ============================================================================
+-- EXECUTION & SUBMISSIONS
+-- ============================================================================
+
+CREATE TABLE submissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    submission_number INTEGER NOT NULL,
+    language VARCHAR(50) NOT NULL,
+    entry_point VARCHAR(255),
+    
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    
+    execution_time_ms INTEGER,
+    cpu_time_ms INTEGER,
+    memory_used_mb INTEGER,
+    peak_memory_mb INTEGER,
+    
+    exit_code INTEGER,
+    
+    stdout_output TEXT,
+    stderr_output TEXT,
+    compiler_output TEXT,
+    
+    time_complexity_estimate VARCHAR(100),
+    space_complexity_estimate VARCHAR(100),
+    
+    total_test_cases INTEGER DEFAULT 0,
+    passed_test_cases INTEGER DEFAULT 0,
+    failed_test_cases INTEGER DEFAULT 0,
+    test_results JSONB DEFAULT '[]',
+    
+    points_earned INTEGER DEFAULT 0,
+    max_points INTEGER DEFAULT 100,
+    
+    submitted_at TIMESTAMP DEFAULT NOW(),
+    started_execution_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    
+    ai_feedback_generated BOOLEAN DEFAULT FALSE,
+    ai_feedback JSONB,
+    
+    UNIQUE(workspace_id, submission_number)
+);
+
+CREATE INDEX idx_submissions_user ON submissions(user_id);
+CREATE INDEX idx_submissions_workspace ON submissions(workspace_id);
+CREATE INDEX idx_submissions_status ON submissions(status);
+CREATE INDEX idx_submissions_submitted ON submissions(submitted_at);
+CREATE INDEX idx_submissions_language ON submissions(language);
+
+-- Execution queue
+CREATE TABLE execution_queue (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    submission_id UUID NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+    status VARCHAR(50) NOT NULL DEFAULT 'queued',
+    
+    priority INTEGER DEFAULT 5,
+    queue_position INTEGER,
+    queued_at TIMESTAMP DEFAULT NOW(),
+    assigned_at TIMESTAMP,
+    
+    executor_node_id VARCHAR(255),
+    executor_region VARCHAR(100),
+    execution_timeout_seconds INTEGER DEFAULT 30,
+    
+    retry_count INTEGER DEFAULT 0,
+    max_retries INTEGER DEFAULT 3,
+    last_error TEXT,
+    
+    completed_at TIMESTAMP
+);
+
+CREATE INDEX idx_queue_status ON execution_queue(status);
+CREATE INDEX idx_queue_submitted ON execution_queue(queued_at);
+CREATE INDEX idx_queue_priority ON execution_queue(priority, queued_at);
+
+-- Test cases
+CREATE TABLE test_cases (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    
+    test_number INTEGER NOT NULL,
+    description VARCHAR(500),
+    
+    input_data TEXT,
+    input_file_path VARCHAR(500),
+    
+    expected_output TEXT,
+    expected_output_file_path VARCHAR(500),
+    
+    time_limit_ms INTEGER DEFAULT 5000,
+    memory_limit_mb INTEGER DEFAULT 256,
+    
+    is_hidden BOOLEAN DEFAULT FALSE,
+    is_example BOOLEAN DEFAULT TRUE,
+    
+    created_at TIMESTAMP DEFAULT NOW(),
+    
+    UNIQUE(workspace_id, test_number)
+);
+
+CREATE INDEX idx_testcases_workspace ON test_cases(workspace_id);
+
+-- ============================================================================
+-- COURSES & LEARNING MANAGEMENT
+-- ============================================================================
+
+CREATE TABLE courses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    instructor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    title VARCHAR(500) NOT NULL,
+    slug VARCHAR(255) NOT NULL UNIQUE,
+    description TEXT,
+    cover_image_url TEXT,
+    
+    is_published BOOLEAN DEFAULT FALSE,
+    is_archived BOOLEAN DEFAULT FALSE,
+    difficulty_level VARCHAR(50),
+    estimated_hours INTEGER,
+    programming_language VARCHAR(100),
+    tags VARCHAR(255)[] DEFAULT '{}',
+    
+    price_cents INTEGER DEFAULT 0,
+    stripe_product_id VARCHAR(255),
+    
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    published_at TIMESTAMP
+);
+
+CREATE INDEX idx_courses_instructor ON courses(instructor_id);
+CREATE INDEX idx_courses_slug ON courses(slug);
+CREATE INDEX idx_courses_published ON courses(is_published);
+
+-- Lessons
+CREATE TABLE lessons (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    
+    title VARCHAR(500) NOT NULL,
+    slug VARCHAR(255) NOT NULL,
+    sequence_number INTEGER NOT NULL,
+    
+    description TEXT,
+    content_markdown TEXT,
+    video_url TEXT,
+    video_duration_seconds INTEGER,
+    
+    code_template_id UUID REFERENCES files(id) ON DELETE SET NULL,
+    attachment_urls TEXT[],
+    
+    is_published BOOLEAN DEFAULT FALSE,
+    requires_completion BOOLEAN DEFAULT TRUE,
+    
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    
+    UNIQUE(course_id, slug)
+);
+
+CREATE INDEX idx_lessons_course ON lessons(course_id);
+CREATE INDEX idx_lessons_sequence ON lessons(course_id, sequence_number);
+
+-- Challenges
+CREATE TABLE challenges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lesson_id UUID NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+    
+    title VARCHAR(500) NOT NULL,
+    problem_statement TEXT,
+    sequence_number INTEGER NOT NULL,
+    
+    difficulty VARCHAR(50),
+    max_points INTEGER DEFAULT 100,
+    time_limit_seconds INTEGER DEFAULT 30,
+    memory_limit_mb INTEGER DEFAULT 256,
+    
+    starter_code TEXT,
+    solution_code TEXT,
+    language VARCHAR(50),
+    
+    hints JSONB DEFAULT '[]',
+    editorial_solution TEXT,
+    resources JSONB DEFAULT '[]',
+    
+    is_published BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    
+    UNIQUE(lesson_id, sequence_number)
+);
+
+CREATE INDEX idx_challenges_lesson ON challenges(lesson_id);
+
+-- Enrollments
+CREATE TABLE enrollments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    
+    lessons_completed INTEGER DEFAULT 0,
+    challenges_completed INTEGER DEFAULT 0,
+    total_points_earned INTEGER DEFAULT 0,
+    
+    enrolled_at TIMESTAMP DEFAULT NOW(),
+    completed_at TIMESTAMP,
+    dropped_at TIMESTAMP,
+    
+    certificate_issued BOOLEAN DEFAULT FALSE,
+    certificate_url TEXT,
+    certificate_issued_at TIMESTAMP,
+    
+    UNIQUE(course_id, user_id)
+);
+
+CREATE INDEX idx_enrollments_user ON enrollments(user_id);
+CREATE INDEX idx_enrollments_course ON enrollments(course_id);
+CREATE INDEX idx_enrollments_status ON enrollments(status);
+
+-- Lesson progress
+CREATE TABLE lesson_progress (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lesson_id UUID NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+    enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
+    
+    is_started BOOLEAN DEFAULT TRUE,
+    is_completed BOOLEAN DEFAULT FALSE,
+    is_passed BOOLEAN DEFAULT FALSE,
+    
+    time_spent_seconds INTEGER DEFAULT 0,
+    started_at TIMESTAMP DEFAULT NOW(),
+    completed_at TIMESTAMP,
+    
+    notes TEXT,
+    bookmarked BOOLEAN DEFAULT FALSE,
+    
+    UNIQUE(lesson_id, enrollment_id)
+);
+
+CREATE INDEX idx_lesson_progress_enrollment ON lesson_progress(enrollment_id);
+CREATE INDEX idx_lesson_progress_completed ON lesson_progress(is_completed);
+
+-- ============================================================================
+-- PAYMENTS & BILLING
+-- ============================================================================
+
+CREATE TABLE payment_methods (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    payment_provider VARCHAR(50) NOT NULL,
+    provider_payment_method_id VARCHAR(255) NOT NULL,
+    
+    card_last_four VARCHAR(4),
+    card_brand VARCHAR(50),
+    card_expiry_month INTEGER,
+    card_expiry_year INTEGER,
+    
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    deleted_at TIMESTAMP,
+    
+    UNIQUE(user_id, provider_payment_method_id)
+);
+
+CREATE INDEX idx_payment_methods_user ON payment_methods(user_id);
+
+-- Subscriptions
+CREATE TABLE subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    stripe_subscription_id VARCHAR(255) UNIQUE,
+    plan_type VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    
+    current_period_start TIMESTAMP,
+    current_period_end TIMESTAMP,
+    cancel_at TIMESTAMP,
+    canceled_at TIMESTAMP,
+    
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_subscriptions_user ON subscriptions(user_id);
+CREATE INDEX idx_subscriptions_status ON subscriptions(status);
+
+-- Invoices
+CREATE TABLE invoices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    subscription_id UUID REFERENCES subscriptions(id) ON DELETE SET NULL,
+    
+    stripe_invoice_id VARCHAR(255) UNIQUE,
+    amount_cents INTEGER NOT NULL,
+    currency VARCHAR(3) DEFAULT 'USD',
+    status VARCHAR(50) NOT NULL,
+    
+    issue_date TIMESTAMP DEFAULT NOW(),
+    due_date TIMESTAMP,
+    paid_date TIMESTAMP,
+    
+    invoice_number VARCHAR(255) UNIQUE,
+    pdf_url TEXT
+);
+
+CREATE INDEX idx_invoices_user ON invoices(user_id);
+CREATE INDEX idx_invoices_status ON invoices(status);
+
+-- ============================================================================
+-- NOTIFICATIONS & MODERATION
+-- ============================================================================
+
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    notification_type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT,
+    
+    related_id UUID,
+    related_type VARCHAR(50),
+    
+    is_read BOOLEAN DEFAULT FALSE,
+    read_at TIMESTAMP,
+    
+    created_at TIMESTAMP DEFAULT NOW(),
+    expires_at TIMESTAMP
+);
+
+CREATE INDEX idx_notifications_user ON notifications(user_id);
+CREATE INDEX idx_notifications_read ON notifications(user_id, is_read);
+
+-- Content reports/moderation
+CREATE TABLE reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+    
+    report_type VARCHAR(50) NOT NULL,
+    reported_id UUID NOT NULL,
+    reported_type VARCHAR(50) NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    description TEXT,
+    
+    status VARCHAR(50) DEFAULT 'open',
+    resolved_at TIMESTAMP,
+    resolved_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    resolution VARCHAR(500),
+    
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_reports_status ON reports(status);
+CREATE INDEX idx_reports_created ON reports(created_at);
+
+-- ============================================================================
+-- AUDIT LOG
+-- ============================================================================
+
+CREATE TABLE audit_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    
+    action VARCHAR(100) NOT NULL,
+    resource_type VARCHAR(50) NOT NULL,
+    resource_id UUID,
+    
+    old_values JSONB,
+    new_values JSONB,
+    
+    ip_address INET,
+    user_agent TEXT,
+    
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_audit_log_user ON audit_log(user_id);
+CREATE INDEX idx_audit_log_resource ON audit_log(resource_type, resource_id);
+CREATE INDEX idx_audit_log_created ON audit_log(created_at);
+
+-- ============================================================================
+-- PERFORMANCE INDEXES
+-- ============================================================================
+
+CREATE INDEX idx_submissions_completed ON submissions(completed_at DESC) WHERE status = 'completed';
+CREATE INDEX idx_enrollments_active ON enrollments(status) WHERE status = 'active';
+CREATE INDEX idx_files_recent ON files(workspace_id, updated_at DESC);
+CREATE INDEX idx_lessons_published ON lessons(course_id) WHERE is_published = TRUE;
+
+-- ============================================================================
+-- GRANTS & ROW-LEVEL SECURITY (optional for multi-tenancy)
+-- ============================================================================
+
+-- ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE files ENABLE ROW LEVEL SECURITY;

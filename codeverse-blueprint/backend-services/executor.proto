@@ -1,0 +1,325 @@
+// ============================================================================
+// CodeVerse: gRPC Protocol Buffers
+// Service: Code Executor (Sandbox Communication)
+// File: protos/executor.proto
+// ============================================================================
+
+syntax = "proto3";
+
+package executor;
+
+service ExecutionService {
+  // Execute code in sandbox and return results
+  rpc Execute(ExecutionRequest) returns (ExecutionResponse);
+  
+  // Stream execution output in real-time
+  rpc ExecuteStream(ExecutionRequest) returns (stream ExecutionStreamResponse);
+  
+  // Cancel a running execution
+  rpc Cancel(CancelRequest) returns (CancelResponse);
+  
+  // Get health status of executor
+  rpc Health(HealthRequest) returns (HealthResponse);
+  
+  // Warm-up a container pool (pre-boot for faster cold starts)
+  rpc WarmupPool(WarmupRequest) returns (WarmupResponse);
+}
+
+// ============================================================================
+// Request Messages
+// ============================================================================
+
+message ExecutionRequest {
+  // Unique execution identifier
+  string execution_id = 1;
+  
+  // Workspace identifier (for isolation)
+  string workspace_id = 2;
+  
+  // Programming language
+  string language = 3;
+  
+  // Code files to execute
+  repeated CodeFile files = 4;
+  
+  // Entry point file (e.g., main.cpp, Main.java)
+  string entry_point = 5;
+  
+  // Build command (e.g., "g++ *.cpp -o program")
+  string build_command = 6;
+  
+  // Run command (e.g., "./program" or "java Main")
+  string run_command = 7;
+  
+  // Docker/gVisor sandbox image
+  string sandbox_image = 8;
+  
+  // Standard input for the program
+  string stdin = 9;
+  
+  // Execution timeout in seconds
+  int32 timeout_seconds = 10;
+  
+  // Memory limit in MB
+  int32 memory_limit_mb = 11;
+  
+  // CPU limit in cores (e.g., 0.5)
+  float cpu_limit_cores = 12;
+  
+  // Environment variables
+  map<string, string> env_vars = 13;
+  
+  // Whether to compile separately (for multi-file projects)
+  bool requires_compilation = 14;
+  
+  // Callback webhook URL (for async notification)
+  string callback_url = 15;
+}
+
+message CodeFile {
+  // File path relative to workspace root
+  string path = 1;
+  
+  // File content (source code)
+  string content = 2;
+  
+  // File language
+  string language = 3;
+}
+
+message CancelRequest {
+  string execution_id = 1;
+}
+
+message HealthRequest {
+  // Optional: check specific executor node
+  string node_id = 1;
+}
+
+message WarmupRequest {
+  // Language to warm up
+  string language = 1;
+  
+  // Number of containers to pre-boot
+  int32 count = 2;
+  
+  // Memory limit for warm containers
+  int32 memory_limit_mb = 3;
+  
+  // CPU limit for warm containers
+  float cpu_limit_cores = 4;
+}
+
+// ============================================================================
+// Response Messages
+// ============================================================================
+
+message ExecutionResponse {
+  // Unique execution identifier
+  string execution_id = 1;
+  
+  // Execution status
+  ExecutionStatus status = 2;
+  
+  // Exit code of the program
+  int32 exit_code = 3;
+  
+  // Standard output
+  string stdout = 4;
+  
+  // Standard error
+  string stderr = 5;
+  
+  // Compiler/interpreter output
+  string compiler_output = 6;
+  
+  // Wall-clock execution time (milliseconds)
+  int64 execution_time_ms = 7;
+  
+  // Actual CPU time (milliseconds)
+  int64 cpu_time_ms = 8;
+  
+  // Peak memory used (MB)
+  int32 peak_memory_mb = 9;
+  
+  // Current memory used (MB)
+  int32 memory_used_mb = 10;
+  
+  // Timestamp of execution start
+  int64 started_at_unix_ms = 11;
+  
+  // Timestamp of execution completion
+  int64 completed_at_unix_ms = 12;
+  
+  // Error message (if status is ERROR or TIMEOUT)
+  string error_message = 13;
+  
+  // Executor node that handled the request
+  string executor_node_id = 14;
+  
+  // Container ID used for execution
+  string container_id = 15;
+  
+  // System metrics
+  SystemMetrics metrics = 16;
+}
+
+message ExecutionStreamResponse {
+  // Type of stream data
+  StreamDataType type = 1;
+  
+  // Actual data
+  oneof data {
+    string stdout_chunk = 2;
+    string stderr_chunk = 3;
+    string log_message = 4;
+    CompilationError compilation_error = 5;
+    RuntimeError runtime_error = 6;
+    ExecutionStatus status_update = 7;
+  }
+  
+  // Timestamp
+  int64 timestamp_unix_ms = 8;
+}
+
+message CancelResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message HealthResponse {
+  bool healthy = 1;
+  string status = 2;
+  
+  // Available resources
+  int32 available_cpu_cores = 3;
+  int32 available_memory_mb = 4;
+  int32 running_executions = 5;
+  int32 queued_executions = 6;
+  
+  // Uptime in seconds
+  int64 uptime_seconds = 7;
+  
+  // Last successful execution
+  int64 last_execution_unix_ms = 8;
+}
+
+message WarmupResponse {
+  bool success = 1;
+  int32 containers_warmed = 2;
+  string message = 3;
+}
+
+// ============================================================================
+// Data Structures
+// ============================================================================
+
+message SystemMetrics {
+  // CPU usage percentage
+  float cpu_percentage = 1;
+  
+  // Memory usage percentage
+  float memory_percentage = 2;
+  
+  // Disk I/O statistics
+  DiskIOStats disk_io = 3;
+  
+  // Network statistics
+  NetworkStats network = 4;
+  
+  // Number of threads
+  int32 thread_count = 5;
+}
+
+message DiskIOStats {
+  // Bytes read
+  int64 bytes_read = 1;
+  
+  // Bytes written
+  int64 bytes_written = 2;
+  
+  // Read operations
+  int64 read_operations = 3;
+  
+  // Write operations
+  int64 write_operations = 4;
+}
+
+message NetworkStats {
+  // Bytes sent
+  int64 bytes_sent = 1;
+  
+  // Bytes received
+  int64 bytes_received = 2;
+  
+  // Packets sent
+  int64 packets_sent = 3;
+  
+  // Packets received
+  int64 packets_received = 4;
+}
+
+message CompilationError {
+  string file = 1;
+  int32 line = 2;
+  int32 column = 3;
+  string message = 4;
+  string severity = 5; // error, warning, info
+}
+
+message RuntimeError {
+  string message = 1;
+  string stack_trace = 2;
+  int32 line = 3;
+  string signal = 4; // SIGSEGV, SIGABRT, etc.
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum ExecutionStatus {
+  // Unknown status
+  UNKNOWN = 0;
+  
+  // Execution pending
+  PENDING = 1;
+  
+  // Execution running
+  RUNNING = 2;
+  
+  // Execution completed successfully
+  COMPLETED = 3;
+  
+  // Execution timed out
+  TIMEOUT = 4;
+  
+  // Runtime error (segfault, exception, etc.)
+  RUNTIME_ERROR = 5;
+  
+  // Compilation error
+  COMPILATION_ERROR = 6;
+  
+  // Out of memory
+  OOM_KILLED = 7;
+  
+  // Sandbox error
+  SANDBOX_ERROR = 8;
+  
+  // Execution cancelled
+  CANCELLED = 9;
+}
+
+enum StreamDataType {
+  UNKNOWN = 0;
+  STDOUT = 1;
+  STDERR = 2;
+  LOG = 3;
+  COMPILE_ERROR = 4;
+  RUNTIME_ERROR = 5;
+  STATUS = 6;
+}
+
+// ============================================================================
+// End of Protocol Buffer Definitions
+// ============================================================================

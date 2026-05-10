@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package executor;
+
+// ExecutionService: Core execution engine for code submission sandboxing
+service ExecutionService {
+  // Execute code in sandbox environment
+  rpc Execute(ExecutionRequest) returns (ExecutionResponse);
+  
+  // Stream execution output in real-time
+  rpc ExecuteStream(ExecutionRequest) returns (stream ExecutionOutput);
+  
+  // Get execution status
+  rpc GetStatus(StatusRequest) returns (StatusResponse);
+  
+  // Health check
+  rpc HealthCheck(HealthRequest) returns (HealthResponse);
+}
+
+// ============================================================================
+// REQUEST MESSAGES
+// ============================================================================
+
+message ExecutionRequest {
+  string execution_id = 1;              // Unique execution ID
+  string workspace_id = 2;              // Workspace ID
+  string language = 3;                  // Programming language (cpp, python, java, javascript, go, rust)
+  
+  repeated CodeFile files = 4;          // Source code files
+  string entry_point = 5;               // Main file to execute
+  
+  string build_command = 6;             // Build command (e.g., g++ -O2 main.cpp -o prog)
+  string run_command = 7;               // Run command (e.g., ./prog)
+  string sandbox_image = 8;             // Docker image for sandbox
+  
+  string stdin = 9;                     // Standard input
+  int32 timeout_seconds = 10;           // Execution timeout
+  int32 memory_limit_mb = 11;           // Memory limit in MB
+  float cpu_limit_cores = 12;           // CPU limit in cores
+  
+  bool compile_only = 13;               // Only compile, don't run
+  repeated TestCase test_cases = 14;    // Test cases to run
+}
+
+message CodeFile {
+  string path = 1;                      // File path (relative to workspace)
+  string content = 2;                   // File content
+  string language = 3;                  // Language hint
+}
+
+message TestCase {
+  string id = 1;                        // Test case ID
+  string input = 2;                     // Input data
+  string expected_output = 3;           // Expected output
+  int32 time_limit_ms = 4;              // Time limit
+  int32 memory_limit_mb = 5;            // Memory limit
+}
+
+// ============================================================================
+// RESPONSE MESSAGES
+// ============================================================================
+
+message ExecutionResponse {
+  string execution_id = 1;
+  string status = 2;                    // pending, running, completed, timeout, error
+  int32 exit_code = 3;                  // Process exit code (-1 if error)
+  
+  string stdout = 4;                    // Standard output
+  string stderr = 5;                    // Standard error
+  string compiler_output = 6;           // Compilation output
+  
+  int32 execution_time_ms = 7;          // Wall-clock execution time
+  int32 cpu_time_ms = 8;                // CPU time used
+  int32 memory_used_mb = 9;             // Memory used
+  int32 peak_memory_mb = 10;            // Peak memory usage
+  
+  repeated TestResult test_results = 11;// Test case results
+  string error_message = 12;            // Error details if failed
+}
+
+message ExecutionOutput {
+  string execution_id = 1;
+  string output_type = 2;               // stdout, stderr, compiler_output, status
+  string data = 3;                      // Output data
+  int64 timestamp_ms = 4;               // Timestamp
+}
+
+message TestResult {
+  string test_id = 1;
+  bool passed = 2;
+  string expected = 3;
+  string actual = 4;
+  int32 execution_time_ms = 5;
+  int32 memory_used_mb = 6;
+  string error = 7;
+}
+
+// ============================================================================
+// STATUS & HEALTH CHECK
+// ============================================================================
+
+message StatusRequest {
+  string execution_id = 1;
+}
+
+message StatusResponse {
+  string execution_id = 1;
+  string status = 2;
+  int32 progress_percent = 3;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;                    // healthy, unhealthy
+  int32 active_executions = 2;          // Current execution count
+  int32 total_completed = 3;            // Total completed executions
+  float avg_execution_time_ms = 4;      // Average execution time
+}

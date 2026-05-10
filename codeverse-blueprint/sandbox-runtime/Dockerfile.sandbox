@@ -1,0 +1,771 @@
+# ============================================================================
+# CodeVerse: Docker Sandbox Configuration
+# Multi-Language Execution Environment with gVisor & Resource Limits
+# ============================================================================
+
+---
+# Dockerfile for Multi-Language Sandbox (Base Image)
+# 
+# This Dockerfile creates a secure, isolated execution environment for
+# running untrusted C, C++, Java, and Python code with strict resource limits.
+#
+# Build: docker build -f Dockerfile.sandbox -t codeverse/sandbox:base .
+
+FROM ubuntu:22.04
+
+# Metadata
+LABEL maintainer="CodeVerse Engineering"
+LABEL description="Secure multi-language sandbox with gVisor integration"
+LABEL version="1.0.0"
+
+# ============================================================================
+# SECURITY: Run as non-root user
+# ============================================================================
+
+# Create unprivileged user for code execution
+RUN groupadd -r coderunner && useradd -r -g coderunner coderunner
+
+# ============================================================================
+# SYSTEM SETUP
+# ============================================================================
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Update packages and install base utilities
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    wget \
+    git \
+    build-essential \
+    gdb \
+    strace \
+    netcat \
+    iputils-ping \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================================================
+# C COMPILER TOOLCHAIN (GCC)
+# ============================================================================
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc-12 \
+    g++-12 \
+    gfortran-12 \
+    libgcc-12-dev \
+    libstdc++-12-dev \
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 \
+    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100 \
+    && update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-12 100 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================================================
+# C++ COMPILER & BUILD TOOLS
+# ============================================================================
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cmake \
+    ninja-build \
+    make \
+    autoconf \
+    automake \
+    libtool \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================================================
+# JAVA RUNTIME & COMPILER
+# ============================================================================
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-21-jdk-headless \
+    maven \
+    gradle \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify Java installation
+RUN java -version && javac -version
+
+# ============================================================================
+# PYTHON RUNTIME & PACKAGE MANAGER
+# ============================================================================
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-dev \
+    python3.11-distutils \
+    python3-pip \
+    python3-virtualenv \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 100 \
+    && python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pre-install common Python packages
+RUN python3 -m pip install --no-cache-dir \
+    numpy \
+    scipy \
+    pandas \
+    matplotlib \
+    scikit-learn \
+    requests \
+    flask \
+    django \
+    pytest
+
+# ============================================================================
+# NODE.JS & NPM
+# ============================================================================
+
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends \
+    nodejs \
+    && npm config set registry https://registry.npmjs.org/ \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================================================
+# GO RUNTIME & TOOLS
+# ============================================================================
+
+RUN wget -O go.tar.gz https://go.dev/dl/go1.21.0.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go.tar.gz && \
+    rm go.tar.gz && \
+    update-alternatives --install /usr/bin/go go /usr/local/go/bin/go 100
+
+ENV PATH="/usr/local/go/bin:$PATH"
+ENV GOPATH="/home/coderunner/go"
+
+# ============================================================================
+# RUST TOOLCHAIN
+# ============================================================================
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain stable --profile minimal && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/home/coderunner/.cargo/bin:$PATH"
+
+# ============================================================================
+# gVisor Runtime Configuration
+# ============================================================================
+
+# Note: gVisor is typically installed on the host system, not in the container.
+# This is a configuration file for how to invoke containers with gVisor.
+#
+# Install runsc (gVisor runtime):
+# curl -fsSL https://gvisor.dev/archive/releases/release/latest/x86_64/runsc | sudo install -m755 /dev/stdin /usr/local/bin/runsc
+#
+# Install gVisor containerd shim:
+# curl -fsSL https://gvisor.dev/archive/releases/release/latest/x86_64/containerd-shim-runsc-v1 | \
+#   sudo install -m755 /dev/stdin /usr/local/bin/containerd-shim-runsc-v1
+
+# ============================================================================
+# SECURITY HARDENING
+# ============================================================================
+
+# Read-only root filesystem (except for specific directories)
+# RUN chmod 555 / && chmod 555 /usr/bin && chmod 555 /usr/lib
+
+# Disable dangerous syscalls via seccomp profile (applied at runtime)
+# See: docker run --security-opt seccomp=seccomp-profile.json
+
+# ============================================================================
+# RESOURCE LIMITS & CGROUP CONFIGURATION
+# ============================================================================
+
+# These limits are applied at runtime via Docker flags or Kubernetes:
+# --memory=256m         # Hard memory limit
+# --memory-swap=256m    # No swap
+# --cpus=0.5            # CPU limit (0.5 cores)
+# --ulimit nofile=1024  # Max open files
+# --ulimit nproc=512    # Max processes
+# --ulimit stack=8388608 # Max stack size (8MB)
+
+# ============================================================================
+# WORKING DIRECTORY & MOUNT POINTS
+# ============================================================================
+
+RUN mkdir -p /tmp/code && \
+    mkdir -p /tmp/output && \
+    mkdir -p /usr/local/lib/python3.11/site-packages && \
+    chown -R coderunner:coderunner /tmp/code /tmp/output
+
+WORKDIR /tmp/code
+
+# ============================================================================
+# EXECUTION SCRIPT
+# ============================================================================
+
+# Create startup script that handles different execution modes
+RUN cat > /usr/local/bin/execute.sh << 'EOF'
+#!/bin/bash
+
+set -e
+
+# Arguments:
+# $1 = language (cpp, c, java, python, javascript, go, rust)
+# $2 = entry_point (main.cpp, Main.java, etc.)
+# $3 = timeout_seconds
+# $4 = memory_limit_mb
+# $5 = cpu_limit_cores
+
+LANGUAGE=$1
+ENTRY_POINT=$2
+TIMEOUT=${3:-30}
+MEMORY_LIMIT=${4:-256}
+CPU_LIMIT=${5:-0.5}
+
+# Record start time
+START_TIME=$(date +%s%N)
+
+# Execute based on language
+case $LANGUAGE in
+  cpp|c++)
+    echo "[COMPILE] Compiling C++ code..."
+    cd /tmp/code
+    g++ -std=c++17 -O2 -Wall -Wextra *.cpp -o /tmp/output/program 2>&1 | tee /tmp/output/compile.log
+    
+    echo "[EXECUTE] Running program (timeout: ${TIMEOUT}s)..."
+    timeout ${TIMEOUT} /tmp/output/program 2>&1 | tee /tmp/output/stdout.log || {
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 124 ]; then
+        echo "[ERROR] Timeout exceeded" > /tmp/output/status.txt
+      else
+        echo "[ERROR] Runtime error" > /tmp/output/status.txt
+      fi
+      exit $EXIT_CODE
+    }
+    ;;
+
+  c)
+    echo "[COMPILE] Compiling C code..."
+    cd /tmp/code
+    gcc -std=c11 -O2 -Wall -Wextra *.c -o /tmp/output/program 2>&1 | tee /tmp/output/compile.log
+    
+    echo "[EXECUTE] Running program..."
+    timeout ${TIMEOUT} /tmp/output/program 2>&1 | tee /tmp/output/stdout.log || {
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 124 ]; then
+        echo "[ERROR] Timeout exceeded" > /tmp/output/status.txt
+      fi
+      exit $EXIT_CODE
+    }
+    ;;
+
+  java)
+    echo "[COMPILE] Compiling Java code..."
+    cd /tmp/code
+    javac *.java 2>&1 | tee /tmp/output/compile.log
+    
+    echo "[EXECUTE] Running Java program..."
+    timeout ${TIMEOUT} java -Xmx${MEMORY_LIMIT}m Main 2>&1 | tee /tmp/output/stdout.log || {
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 124 ]; then
+        echo "[ERROR] Timeout exceeded" > /tmp/output/status.txt
+      fi
+      exit $EXIT_CODE
+    }
+    ;;
+
+  python|py)
+    echo "[EXECUTE] Running Python script..."
+    cd /tmp/code
+    timeout ${TIMEOUT} python3 ${ENTRY_POINT} 2>&1 | tee /tmp/output/stdout.log || {
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 124 ]; then
+        echo "[ERROR] Timeout exceeded" > /tmp/output/status.txt
+      fi
+      exit $EXIT_CODE
+    }
+    ;;
+
+  javascript|js|node)
+    echo "[EXECUTE] Running Node.js script..."
+    cd /tmp/code
+    timeout ${TIMEOUT} node ${ENTRY_POINT} 2>&1 | tee /tmp/output/stdout.log || {
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 124 ]; then
+        echo "[ERROR] Timeout exceeded" > /tmp/output/status.txt
+      fi
+      exit $EXIT_CODE
+    }
+    ;;
+
+  go)
+    echo "[COMPILE] Compiling Go code..."
+    cd /tmp/code
+    go build -o /tmp/output/program . 2>&1 | tee /tmp/output/compile.log
+    
+    echo "[EXECUTE] Running Go program..."
+    timeout ${TIMEOUT} /tmp/output/program 2>&1 | tee /tmp/output/stdout.log || {
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 124 ]; then
+        echo "[ERROR] Timeout exceeded" > /tmp/output/status.txt
+      fi
+      exit $EXIT_CODE
+    }
+    ;;
+
+  rust)
+    echo "[COMPILE] Compiling Rust code..."
+    cd /tmp/code
+    rustc -O ${ENTRY_POINT} -o /tmp/output/program 2>&1 | tee /tmp/output/compile.log
+    
+    echo "[EXECUTE] Running Rust program..."
+    timeout ${TIMEOUT} /tmp/output/program 2>&1 | tee /tmp/output/stdout.log || {
+      EXIT_CODE=$?
+      if [ $EXIT_CODE -eq 124 ]; then
+        echo "[ERROR] Timeout exceeded" > /tmp/output/status.txt
+      fi
+      exit $EXIT_CODE
+    }
+    ;;
+
+  *)
+    echo "[ERROR] Unsupported language: $LANGUAGE" >&2
+    exit 1
+    ;;
+esac
+
+# Record end time
+END_TIME=$(date +%s%N)
+DURATION_MS=$(( (END_TIME - START_TIME) / 1000000 ))
+
+echo "Execution completed in ${DURATION_MS}ms"
+EOF
+
+chmod +x /usr/local/bin/execute.sh
+
+# ============================================================================
+# RUNTIME CONFIGURATION
+# ============================================================================
+
+# Drop unnecessary capabilities
+ENTRYPOINT ["/bin/bash"]
+USER coderunner
+
+# ============================================================================
+# HEALTH CHECK
+# ============================================================================
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD test -f /tmp/output/stdout.log || exit 1
+
+---
+
+# ============================================================================
+# docker-compose.yml: Runtime Configuration
+# ============================================================================
+
+version: '3.9'
+
+services:
+  # Single language sandbox containers
+  sandbox-cpp:
+    image: codeverse/sandbox:cpp-latest
+    container_name: codeverse-sandbox-cpp
+    runtime: runsc  # gVisor runtime
+    
+    # Resource limits
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: '1.0'
+    
+    # Read-only root filesystem
+    read_only: true
+    
+    # Temporary directories with write access
+    tmpfs:
+      - /tmp:size=1G,noexec,nosuid,nodev
+      - /var/tmp:size=100m
+    
+    # Security options
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined  # Or use seccomp-profile.json
+    
+    # Network isolation
+    networks:
+      - sandbox-net
+    
+    # No internet access
+    dns: []
+    
+    # Logging
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    volumes:
+      - /tmp/code:/tmp/code:ro  # Code read-only
+      - /tmp/output:/tmp/output:rw  # Output writable
+    
+    environment:
+      SANDBOX_TIMEOUT: "30"
+      MAX_MEMORY_MB: "512"
+      LANGUAGE: "cpp"
+    
+    # Keep container running for exec
+    stdin_open: true
+    tty: true
+
+  sandbox-python:
+    image: codeverse/sandbox:python-latest
+    container_name: codeverse-sandbox-python
+    runtime: runsc
+    
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: '0.5'
+    
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,noexec,nosuid,nodev
+    
+    cap_drop:
+      - ALL
+    
+    security_opt:
+      - no-new-privileges:true
+    
+    networks:
+      - sandbox-net
+    
+    volumes:
+      - /tmp/code:/tmp/code:ro
+      - /tmp/output:/tmp/output:rw
+    
+    environment:
+      SANDBOX_TIMEOUT: "30"
+      MAX_MEMORY_MB: "256"
+      LANGUAGE: "python"
+
+  sandbox-java:
+    image: codeverse/sandbox:java-latest
+    container_name: codeverse-sandbox-java
+    runtime: runsc
+    
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: '1.0'
+    
+    read_only: true
+    tmpfs:
+      - /tmp:size=1G,noexec,nosuid,nodev
+    
+    cap_drop:
+      - ALL
+    
+    security_opt:
+      - no-new-privileges:true
+    
+    networks:
+      - sandbox-net
+    
+    volumes:
+      - /tmp/code:/tmp/code:ro
+      - /tmp/output:/tmp/output:rw
+    
+    environment:
+      SANDBOX_TIMEOUT: "30"
+      MAX_MEMORY_MB: "512"
+      LANGUAGE: "java"
+
+networks:
+  sandbox-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+---
+
+# ============================================================================
+# Kubernetes manifests/sandbox-deployment.yaml
+# Deploy sandbox containers to Kubernetes with resource isolation
+# ============================================================================
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: codeverse-sandbox
+
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: sandbox-quota
+  namespace: codeverse-sandbox
+spec:
+  hard:
+    requests.memory: "1000Gi"
+    requests.cpu: "500"
+    limits.memory: "1000Gi"
+    limits.cpu: "500"
+    pods: "10000"
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sandbox-pdb
+  namespace: codeverse-sandbox
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: sandbox
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sandbox-pool
+  namespace: codeverse-sandbox
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: sandbox
+  template:
+    metadata:
+      labels:
+        app: sandbox
+        language: generic
+    spec:
+      # Security context at pod level
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+        sysctls:
+          - name: net.ipv4.ip_forward
+            value: "0"
+      
+      # Node affinity (prefer dedicated sandbox nodes)
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node.codeverse.io/type
+                    operator: In
+                    values:
+                      - execution
+      
+      # Tolerations for sandbox nodes
+      tolerations:
+        - key: sandbox
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      
+      containers:
+      - name: sandbox
+        image: codeverse/sandbox:latest
+        imagePullPolicy: IfNotPresent
+        
+        # Resource limits (hard limits)
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+            ephemeral-storage: "1Gi"
+        
+        # Security context for container
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+              - ALL
+            add:
+              - NET_BIND_SERVICE
+        
+        # Health checks
+        livenessProbe:
+          exec:
+            command:
+              - /bin/bash
+              - -c
+              - test -f /tmp/output/health || exit 1
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          exec:
+            command:
+              - /bin/bash
+              - -c
+              - test -S /tmp/sandbox.sock || exit 1
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        
+        # Volumes
+        volumeMounts:
+          - name: tmp-code
+            mountPath: /tmp/code
+            readOnly: true
+          - name: tmp-output
+            mountPath: /tmp/output
+          - name: tmp-empty
+            mountPath: /var/tmp
+        
+        # Environment
+        env:
+          - name: SANDBOX_TIMEOUT
+            value: "30"
+          - name: MAX_MEMORY_MB
+            value: "512"
+          - name: PYTHONUNBUFFERED
+            value: "1"
+        
+        # Stdin/stdout
+        stdin: true
+        tty: false
+      
+      # Volumes
+      volumes:
+        - name: tmp-code
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: tmp-output
+          emptyDir:
+            sizeLimit: 500Mi
+        - name: tmp-empty
+          emptyDir:
+            medium: Memory
+            sizeLimit: 100Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sandbox-service
+  namespace: codeverse-sandbox
+spec:
+  selector:
+    app: sandbox
+  ports:
+    - protocol: TCP
+      port: 50051
+      targetPort: 50051
+      name: grpc
+  type: ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sandbox-hpa
+  namespace: codeverse-sandbox
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sandbox-pool
+  minReplicas: 5
+  maxReplicas: 100
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+
+---
+
+# ============================================================================
+# seccomp-profile.json: Restrict Dangerous System Calls
+# ============================================================================
+
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "defaultErrnoRet": 1,
+  "archMap": [
+    {
+      "architecture": "SCMP_ARCH_X86_64",
+      "subArchitectures": [
+        "SCMP_ARCH_X86",
+        "SCMP_ARCH_X32"
+      ]
+    }
+  ],
+  "syscalls": [
+    {
+      "names": [
+        "read", "write", "open", "close", "stat", "fstat", "lstat",
+        "poll", "lseek", "mmap", "mprotect", "munmap", "brk",
+        "rt_sigaction", "rt_sigprocmask", "rt_sigpending", "rt_sigtimedwait",
+        "rt_sigaction", "rt_sigprocmask", "sigaltstack", "execve",
+        "exit", "wait4", "kill", "uname", "fcntl", "flock", "fsync",
+        "fdatasync", "truncate", "ftruncate", "getdents", "getcwd",
+        "chdir", "fchdir", "rename", "mkdir", "rmdir", "creat",
+        "link", "unlink", "symlink", "readlink", "chmod", "fchmod",
+        "lchmod", "chown", "fchown", "lchown", "lseek", "access",
+        "nice", "ftime", "sync", "kill", "rename", "mkdir", "rmdir",
+        "dup", "dup2", "pause", "nanosleep", "getitimer", "alarm",
+        "setitimer", "getpid", "sendfile", "socket", "connect",
+        "accept", "sendto", "recvfrom", "sendmsg", "recvmsg",
+        "shutdown", "bind", "listen", "getsockname", "getpeername",
+        "socketpair", "setsockopt", "getsockopt", "clone", "fork",
+        "vfork", "execve", "exit", "wait4", "kill", "uname"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "names": [
+        "ptrace", "process_vm_readv", "process_vm_writev",
+        "perf_event_open", "bpf", "userfaultfd",
+        "mount", "umount2", "syslog", "sysctl"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 13
+    }
+  ]
+}

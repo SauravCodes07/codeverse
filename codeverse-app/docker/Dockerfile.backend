@@ -3,7 +3,7 @@
 # Stage 1: Build
 FROM node:20-alpine AS builder
 
-WORKDIR /app
+WORKDIR /app/backend
 
 # Copy package files
 COPY backend/package*.json ./
@@ -21,7 +21,7 @@ RUN npm run build
 # Stage 2: Runtime
 FROM node:20-alpine
 
-WORKDIR /app
+WORKDIR /app/backend
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
@@ -37,10 +37,10 @@ COPY backend/package*.json ./
 RUN npm ci --only=production
 
 # Copy built application from builder stage
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/backend/dist ./dist
 
 # Create logs directory
-RUN mkdir -p logs && chown -R nodejs:nodejs /app
+RUN mkdir -p logs && chown -R nodejs:nodejs /app/backend
 
 # Switch to non-root user
 USER nodejs
@@ -53,6 +53,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 ENTRYPOINT ["dumb-init", "--"]
 
 # Start application
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/router.js"]
 
 EXPOSE 3000

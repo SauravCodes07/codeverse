@@ -260,7 +260,8 @@ class AntigravityRouter {
       const { email, password } = req.body;
       
       if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password required' });
+        res.status(400).json({ error: 'Email and password required' });
+        return;
       }
 
       // Demo: Accept any email/password for now

@@ -202,6 +202,30 @@ class AntigravityRouter {
   }
 
   private setupMiddleware(): void {
+    // CORS: Allow requests from frontend
+    this.app.use((req, res, next) => {
+      const allowedOrigins = [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'https://codeverse-production-e200.up.railway.app',
+        process.env.FRONTEND_URL || '',
+      ];
+      const origin = req.get('origin');
+      if (allowedOrigins.includes(origin || '')) {
+        res.set('Access-Control-Allow-Origin', origin);
+      } else {
+        res.set('Access-Control-Allow-Origin', '*');
+      }
+      res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.set('Access-Control-Allow-Credentials', 'true');
+      
+      if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+      }
+      next();
+    });
+    
     this.app.use(express.json({ limit: '50mb' }));
     this.app.use(express.urlencoded({ limit: '50mb', extended: true }));
     this.app.use((req, res, next) => {
@@ -219,10 +243,39 @@ class AntigravityRouter {
       res.json({ status: 'healthy', timestamp: new Date().toISOString() });
     });
 
+    // Auth endpoint
+    this.app.post('/api/v1/auth/login', this.handleLogin.bind(this));
+
     this.app.post('/api/v1/execute', this.handleExecution.bind(this));
     this.app.get('/api/v1/execution/:executionId', this.getExecutionStatus.bind(this));
     this.app.get('/api/v1/execution/:executionId/results', this.getExecutionResults.bind(this));
     this.app.get('/api/v1/queue/stats', this.getQueueStats.bind(this));
+  }
+
+  private async handleLogin(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password required' });
+      }
+
+      // Demo: Accept any email/password for now
+      // TODO: Implement real auth with database
+      const token = Buffer.from(`${email}:${Date.now()}`).toString('base64');
+      
+      res.json({
+        token,
+        user: {
+          id: 'user_' + randomUUID(),
+          email,
+          name: email.split('@')[0],
+        },
+      });
+    } catch (error) {
+      console.error('[Login Error]', error);
+      res.status(500).json({ error: 'Login failed' });
+    }
   }
 
   private async handleExecution(req: Request, res: Response): Promise<void> {

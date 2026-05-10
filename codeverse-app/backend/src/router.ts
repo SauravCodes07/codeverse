@@ -209,10 +209,13 @@ class AntigravityRouter {
         'http://localhost:5173',
         'https://codeverse-production-e200.up.railway.app',
         process.env.FRONTEND_URL || '',
-      ];
+      ].filter(url => url); // Remove empty strings
+      
       const origin = req.get('origin');
-      if (allowedOrigins.includes(origin || '')) {
-        res.set('Access-Control-Allow-Origin', origin);
+      
+      // Allow all origins in production for now (you can restrict later)
+      if (allowedOrigins.includes(origin || '') || !origin) {
+        res.set('Access-Control-Allow-Origin', origin || '*');
       } else {
         res.set('Access-Control-Allow-Origin', '*');
       }

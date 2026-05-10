@@ -250,6 +250,13 @@ class AntigravityRouter {
     // Auth endpoint
     this.app.post('/api/v1/auth/login', this.handleLogin.bind(this));
 
+    // Workspace endpoints
+    this.app.get('/api/v1/workspaces', this.getWorkspaces.bind(this));
+    this.app.post('/api/v1/workspaces', this.createWorkspace.bind(this));
+    this.app.get('/api/v1/workspaces/:workspaceId/files', this.getWorkspaceFiles.bind(this));
+    this.app.post('/api/v1/workspaces/:workspaceId/files', this.createFile.bind(this));
+
+    // Execution endpoints
     this.app.post('/api/v1/execute', this.handleExecution.bind(this));
     this.app.get('/api/v1/execution/:executionId', this.getExecutionStatus.bind(this));
     this.app.get('/api/v1/execution/:executionId/results', this.getExecutionResults.bind(this));
@@ -280,6 +287,83 @@ class AntigravityRouter {
     } catch (error) {
       console.error('[Login Error]', error);
       res.status(500).json({ error: 'Login failed' });
+    }
+  }
+
+  private async getWorkspaces(req: Request, res: Response): Promise<void> {
+    try {
+      // Return demo workspaces for now
+      res.json([
+        {
+          id: 'demo-workspace-1',
+          name: 'My First Workspace',
+          description: 'Demo workspace',
+          owner_id: 'user_1',
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    } catch (error) {
+      console.error('[Workspaces Error]', error);
+      res.status(500).json({ error: 'Failed to load workspaces' });
+    }
+  }
+
+  private async createWorkspace(req: Request, res: Response): Promise<void> {
+    try {
+      const { name, description } = req.body;
+      const workspace = {
+        id: 'workspace_' + randomUUID(),
+        name,
+        description,
+        owner_id: 'user_1',
+        created_at: new Date().toISOString(),
+      };
+      res.status(201).json(workspace);
+    } catch (error) {
+      console.error('[Create Workspace Error]', error);
+      res.status(500).json({ error: 'Failed to create workspace' });
+    }
+  }
+
+  private async getWorkspaceFiles(req: Request, res: Response): Promise<void> {
+    try {
+      // Return demo files for now
+      res.json([
+        {
+          id: 'file_1',
+          name: 'main.py',
+          path: '/main.py',
+          content: '# Welcome to CodeVerse!\nprint("Hello, World!")\n',
+          language: 'python',
+        },
+        {
+          id: 'file_2',
+          name: 'hello.js',
+          path: '/hello.js',
+          content: '// JavaScript Example\nconsole.log("Hello, CodeVerse!");\n',
+          language: 'javascript',
+        },
+      ]);
+    } catch (error) {
+      console.error('[Get Files Error]', error);
+      res.status(500).json({ error: 'Failed to load files' });
+    }
+  }
+
+  private async createFile(req: Request, res: Response): Promise<void> {
+    try {
+      const { name, content, language } = req.body;
+      const file = {
+        id: 'file_' + randomUUID(),
+        name,
+        path: '/' + name,
+        content,
+        language,
+      };
+      res.status(201).json(file);
+    } catch (error) {
+      console.error('[Create File Error]', error);
+      res.status(500).json({ error: 'Failed to create file' });
     }
   }
 

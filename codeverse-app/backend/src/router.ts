@@ -185,10 +185,16 @@ class AntigravityRouter {
       idleTimeoutMillis: 30000,
     });
 
-    // Initialize Redis
+    // Redis: lazy connect + bounded retries so missing Redis on Railway does not block HTTP
     this.redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
+      host: process.env.REDIS_HOST || '127.0.0.1',
+      port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      lazyConnect: true,
+      maxRetriesPerRequest: 2,
+      retryStrategy: () => null,
+    });
+    this.redis.on('error', (err) => {
+      console.warn('[Redis]', err.message);
     });
 
     this.setupMiddleware();
@@ -458,8 +464,9 @@ class AntigravityRouter {
   }
 
   public start(port: number = 3000): void {
-    this.app.listen(port, () => {
-      console.log(`[CodeVerse Antigravity Router] Listening on port ${port}`);
+    const host = process.env.BIND_HOST || '0.0.0.0';
+    this.app.listen(port, host, () => {
+      console.log(`[CodeVerse Antigravity Router] Listening on http://${host}:${port}`);
       console.log(`Supported languages: ${Object.keys(LANGUAGE_CONFIGS).join(', ')}`);
     });
   }
@@ -469,7 +476,8 @@ class AntigravityRouter {
 // MAIN ENTRY POINT
 // ============================================================================
 
+const port = Number.parseInt(process.env.PORT || '3000', 10);
 const router = new AntigravityRouter();
-router.start(parseInt(process.env.PORT || '3000'));
+router.start(Number.isFinite(port) && port > 0 ? port : 3000);
 
 export default router;

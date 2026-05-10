@@ -98,8 +98,9 @@ class CodeVerseAPI {
   private client: AxiosInstance;
 
   constructor(token?: string) {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
     this.client = axios.create({
-      baseURL: 'http://localhost:3000',
+      baseURL: apiUrl,
       headers: {
         'Authorization': token ? `Bearer ${token}` : '',
         'Content-Type': 'application/json',

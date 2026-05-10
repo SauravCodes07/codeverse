@@ -2,8 +2,5 @@
   "build": {
     "builder": "dockerfile",
     "dockerfile": "docker/Dockerfile.backend"
-  },
-  "deploy": {
-    "startCommand": "npm run start"
   }
 }

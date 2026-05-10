@@ -224,7 +224,8 @@ class AntigravityRouter {
       res.set('Access-Control-Allow-Credentials', 'true');
       
       if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
+        res.sendStatus(200);
+        return;
       }
       next();
     });

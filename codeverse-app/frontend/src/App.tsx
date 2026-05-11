@@ -1,53 +1,57 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import Editor from '@monaco-editor/react';
-import axios, { AxiosInstance } from 'axios';
-import { io, Socket } from 'socket.io-client';
-import create from 'zustand';
-import { Terminal } from 'xterm';
-import 'xterm/css/xterm.css';
+import React, { useState } from 'react';
+import LandingPage from './pages/LandingPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import OTPPage from './pages/OTPPage';
+import IDEWorkspace from './pages/IDEWorkspace';
 
-// ============================================================================
-// TYPES
-// ============================================================================
+type PageType = 'landing' | 'login' | 'register' | 'forgot' | 'otp' | 'ide';
 
-interface CodeFile {
-  id?: string;
-  name: string;
-  path: string;
-  content: string;
-  language: string;
+function App() {
+  const [currentPage, setCurrentPage] = useState<PageType>('landing');
+  const [userEmail, setUserEmail] = useState('');
+
+  const handleNavigate = (page: PageType, email?: string) => {
+    if (email) setUserEmail(email);
+    setCurrentPage(page);
+  };
+
+  return (
+    <div className="w-full h-full">
+      {currentPage === 'landing' && (
+        <LandingPage />
+      )}
+      {currentPage === 'login' && (
+        <LoginPage onNavigate={handleNavigate} />
+      )}
+      {currentPage === 'register' && (
+        <RegisterPage onNavigate={handleNavigate} />
+      )}
+      {currentPage === 'forgot' && (
+        <ForgotPasswordPage onNavigate={handleNavigate} />
+      )}
+      {currentPage === 'otp' && (
+        <OTPPage email={userEmail} onNavigate={handleNavigate} />
+      )}
+      {currentPage === 'ide' && (
+        <IDEWorkspace />
+      )}
+    </div>
+  );
 }
 
-interface ExecutionResult {
-  execution_id: string;
-  status: string;
-  exit_code: number | null;
-  stdout: string;
-  stderr: string;
-  compiler_output?: string;
-  execution_time_ms: number;
-  memory_used_mb: number;
-}
+export default App;
 
-interface Workspace {
-  id: string;
-  name: string;
-  description?: string;
-  owner_id: string;
-  created_at: string;
-}
-
-// ============================================================================
-// ZUSTAND STORE
-// ============================================================================
-
+// OLD CODE BELOW - KEPT FOR REFERENCE
+/*
 interface AppStore {
-  workspace: Workspace | null;
-  files: Map<string, CodeFile>;
+  workspace: null;
+  files: Map<string, any>;
   activeFilePath: string;
   isExecuting: boolean;
   terminalOutput: string;
-  lastExecution: ExecutionResult | null;
+  lastExecution: null;
   token: string | null;
   
   setWorkspace: (ws: Workspace) => void;

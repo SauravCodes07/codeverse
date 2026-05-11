@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, ArrowRight, Github, Chrome } from 'lucide-react';
+import { Mail, Lock, ArrowRight, GitBranch, Globe } from 'lucide-react';
 
 interface LoginPageProps {
   onNavigate?: (page: string) => void;
@@ -118,11 +118,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
           {/* OAuth Buttons */}
           <div className="space-y-3 mb-8">
             <button className="w-full py-3 border border-slate-600 rounded-lg text-white hover:border-slate-500 transition flex items-center justify-center gap-2">
-              <Github className="w-5 h-5" />
+              <GitBranch className="w-5 h-5" />
               Continue with GitHub
             </button>
             <button className="w-full py-3 border border-slate-600 rounded-lg text-white hover:border-slate-500 transition flex items-center justify-center gap-2">
-              <Chrome className="w-5 h-5" />
+              <Globe className="w-5 h-5" />
               Continue with Google
             </button>
           </div>

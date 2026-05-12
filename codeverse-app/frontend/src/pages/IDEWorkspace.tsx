@@ -1,10 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { 
-  FileText, Folder, Search, GitBranch, Settings, Play, Terminal, Bug,
-  Send, MessageSquare, Plus, X, Share2, Save, Download, Menu, LogOut,
-  Users, Maximize2, Copy, Eye
+  FileText, Folder, Search, GitBranch, Settings, Play, Terminal,
+  Send, MessageSquare, Plus, X, Share2, Download, Menu,
+  Users, LogOut
 } from 'lucide-react';
+import { PageType } from '../types';
+
+interface IDEWorkspaceProps {
+  onNavigate?: (page: PageType) => void;
+}
 
 interface File {
   id: string;
@@ -21,7 +26,7 @@ interface AIMessage {
   timestamp: Date;
 }
 
-export const IDEWorkspace: React.FC = () => {
+export const IDEWorkspace: React.FC<IDEWorkspaceProps> = ({ onNavigate }) => {
   // State
   const [files, setFiles] = useState<File[]>([
     {
@@ -54,7 +59,6 @@ export const IDEWorkspace: React.FC = () => {
     },
   ]);
   const [aiInput, setAiInput] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const terminalEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll terminal
@@ -82,6 +86,29 @@ export const IDEWorkspace: React.FC = () => {
       setTerminalOutput(prev => prev + 'Output: Hello from CodeVerse!\n$ ');
       setIsRunning(false);
     }, 2000);
+  };
+
+  const handleDeploy = () => {
+    setIsRunning(true);
+    setTerminalOutput(prev => prev + '\n$ codeverse deploy --prod\n> Starting production deployment...\n');
+    
+    const steps = [
+      '📦 Packaging workspace...',
+      '🚀 Uploading to Railway...',
+      '🔨 Building Docker image...',
+      '✅ Deployment successful!',
+      '> URL: https://my-awesome-project.codeverse.app'
+    ];
+
+    steps.forEach((step, index) => {
+      setTimeout(() => {
+        setTerminalOutput(prev => prev + step + '\n');
+        if (index === steps.length - 1) {
+          setIsRunning(false);
+          setTerminalOutput(prev => prev + '$ ');
+        }
+      }, (index + 1) * 800);
+    });
   };
 
   const handleAiSubmit = (e: React.FormEvent) => {
@@ -236,7 +263,11 @@ export const IDEWorkspace: React.FC = () => {
               <Play className="w-4 h-4" />
               {isRunning ? 'Running...' : 'Run'}
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 border border-slate-700 text-white rounded-lg hover:border-cyan-500 transition">
+            <button 
+              onClick={handleDeploy}
+              disabled={isRunning}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-700 text-white rounded-lg hover:border-cyan-500 transition disabled:opacity-50"
+            >
               <Download className="w-4 h-4" />
               Deploy
             </button>
@@ -245,6 +276,13 @@ export const IDEWorkspace: React.FC = () => {
             </button>
             <button className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white">
               <Users className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => onNavigate?.('landing')}
+              className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400 transition"
+              title="Log Out"
+            >
+              <LogOut className="w-5 h-5" />
             </button>
           </div>
         </div>

@@ -211,7 +211,7 @@ export const debounce = <T extends (...args: unknown[]) => unknown>(
 // STORE
 // ============================================================
 
-export const useIDEStore = create<IDEState>()((set, get) => ({
+export const useIDEStore = create<IDEState>()((set) => ({
   // Initial state
   files: DEFAULT_FILES,
   openTabs: ['file-1', 'file-2'],

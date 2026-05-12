@@ -1,13 +1,15 @@
-/**
- * CodeVerse backend entrypoint.
- * Server implementation lives in ./router.ts (AntigravityRouter).
- */
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import app from './app';
 
-console.log('[codeverse-boot]', JSON.stringify({
-  PORT: process.env.PORT ?? '(unset, using 3000 in code)',
-  cwd: process.cwd(),
-  BIND_HOST: process.env.BIND_HOST ?? '0.0.0.0',
-}));
+dotenv.config();
 
-import './router';
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`
+  🚀 CodeVerse Backend is running!
+  📡 Port: ${PORT}
+  🔗 URL: http://localhost:${PORT}
+  🛠️ Environment: ${process.env.NODE_ENV || 'development'}
+  `);
+});

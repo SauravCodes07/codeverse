@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Mail, ArrowRight } from 'lucide-react';
 
+import { PageType } from '../types';
+
 interface ForgotPasswordPageProps {
-  onNavigate?: (page: string) => void;
+  onNavigate?: (page: PageType) => void;
 }
 
 export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ onNavigate }) => {

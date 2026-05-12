@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight } from 'lucide-react';
 
+import { PageType } from '../types';
+
 interface OTPPageProps {
   email?: string;
-  onNavigate?: (page: string) => void;
+  onNavigate?: (page: PageType) => void;
 }
 
 export const OTPPage: React.FC<OTPPageProps> = ({ email = 'you@example.com', onNavigate }) => {

@@ -8,17 +8,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import OTPPage from './pages/OTPPage';
 import IDEWorkspace from './pages/IDEWorkspace';
 
-// ============================================================
-// TYPES
-// ============================================================
-
-export type PageType =
-  | 'landing'
-  | 'login'
-  | 'register'
-  | 'forgot'
-  | 'otp'
-  | 'ide';
+import { PageType } from './types';
 
 // ============================================================
 // NOTIFICATION TOAST

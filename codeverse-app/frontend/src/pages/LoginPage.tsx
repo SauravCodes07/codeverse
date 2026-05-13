@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Mail, Lock, ArrowRight, Github, Globe, Shield, Sparkles, Code2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, GitBranch as Github, Globe, Shield, Sparkles, Code2 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { PageType } from '../types';
 import { Button } from '../components/Button';
+import { api } from '../lib/api';
 
 interface LoginPageProps {
   onNavigate?: (page: PageType) => void;
@@ -19,30 +20,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+      const data = await api.login({ email, password });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
+      if (data.error) {
+        throw new Error(data.error);
       }
 
       setAuth(data.user, data.token);
-      addNotification({ type: 'success', message: 'Welcome back, ' + data.user.full_name });
+      addNotification({ type: 'success', message: 'Welcome back, ' + (data.user.full_name || data.user.username) });
       onNavigate?.('ide');
     } catch (error: any) {
-      addNotification({ type: 'error', message: error.message });
+      addNotification({ type: 'error', message: error.message || 'Login failed' });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleOAuth = (provider: 'google' | 'github') => {
-    window.location.href = `http://localhost:3000/api/v1/auth/${provider}`;
+    window.location.href = `${api.getBaseUrl()}/auth/${provider}`;
   };
 
   return (

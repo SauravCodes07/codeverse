@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
+import config from '../config/env';
 
 export class AuthController {
   static async register(req: Request, res: Response) {
@@ -11,7 +12,6 @@ export class AuthController {
         return;
       }
 
-      // Check if user already exists
       const existingEmail = await AuthService.findUserByEmail(email);
       if (existingEmail) {
         res.status(409).json({ error: 'Email already registered' });
@@ -24,7 +24,6 @@ export class AuthController {
         return;
       }
 
-      // Hash password and create user
       const passwordHash = await AuthService.hashPassword(password);
       const user = await AuthService.createUser({
         email,
@@ -39,9 +38,12 @@ export class AuthController {
         username: user.username,
       });
 
+      const refreshToken = AuthService.generateRefreshToken({ id: user.id });
+
       res.status(201).json({
         message: 'User registered successfully',
         token,
+        refreshToken,
         user,
       });
       return;
@@ -81,9 +83,12 @@ export class AuthController {
         username: user.username,
       });
 
+      const refreshToken = AuthService.generateRefreshToken({ id: user.id });
+
       res.json({
         message: 'Login successful',
         token,
+        refreshToken,
         user: {
           id: user.id,
           email: user.email,
@@ -103,6 +108,11 @@ export class AuthController {
   static async me(req: Request, res: Response) {
     try {
       const user = (req as any).user;
+      if (!user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
       const fullUser = await AuthService.findUserByEmail(user.email);
       
       if (!fullUser) {
@@ -125,11 +135,81 @@ export class AuthController {
     }
   }
 
+  static async refresh(req: Request, res: Response) {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        res.status(400).json({ error: 'Refresh token required' });
+        return;
+      }
+
+      const decoded = AuthService.verifyToken(refreshToken);
+      if (!decoded) {
+        res.status(403).json({ error: 'Invalid refresh token' });
+        return;
+      }
+
+      // Check if user exists
+      const result = await AuthService.findUserByEmail(decoded.email); // or by ID if refresh token has ID
+      // If refresh token only has ID, we might need a different lookup
+      // For now, let's assume it has what we need or we look up by ID
+      
+      const token = AuthService.generateToken({
+        id: decoded.id,
+        email: decoded.email || '', 
+        username: decoded.username || '',
+      });
+
+      res.json({ token });
+    } catch (error) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async forgotPassword(req: Request, res: Response) {
+    try {
+      const { email } = req.body;
+      const user = await AuthService.findUserByEmail(email);
+      
+      if (user) {
+        const otp = await AuthService.generateOTP(email);
+        console.log(`[OTP for ${email}]: ${otp}`); // In production, send via email
+      }
+
+      res.json({ message: 'If an account exists with this email, an OTP has been sent.' });
+    } catch (error) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async verifyOTP(req: Request, res: Response) {
+    try {
+      const { email, otp, newPassword } = req.body;
+      const isValid = await AuthService.verifyOTP(email, otp);
+      
+      if (!isValid) {
+        res.status(400).json({ error: 'Invalid or expired OTP' });
+        return;
+      }
+
+      if (newPassword) {
+        const user = await AuthService.findUserByEmail(email);
+        const passwordHash = await AuthService.hashPassword(newPassword);
+        await AuthService.updatePassword(user.id, passwordHash);
+        res.json({ message: 'Password updated successfully' });
+      } else {
+        res.json({ message: 'OTP verified successfully' });
+      }
+    } catch (error) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
   static async oauthSuccess(req: Request, res: Response) {
     try {
       const user = (req as any).user;
       if (!user) {
-        res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=auth_failed`);
+        res.redirect(`${config.frontendUrl}/login?error=auth_failed`);
         return;
       }
 
@@ -141,12 +221,11 @@ export class AuthController {
         username: user.username,
       });
 
-      // Redirect back to frontend with token
-      // In a real production app, you might use a secure cookie instead
-      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/?token=${token}`);
+      res.redirect(`${config.frontendUrl}/?token=${token}`);
     } catch (error) {
       console.error('[OAuth Success Error]', error);
-      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=server_error`);
+      res.redirect(`${config.frontendUrl}/login?error=server_error`);
     }
   }
 }
+

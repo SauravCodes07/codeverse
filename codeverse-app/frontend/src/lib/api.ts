@@ -16,16 +16,18 @@ export interface ApiResponse<T = unknown> {
 
 const API_BASE_URL =
   (import.meta as unknown as { env: Record<string, string> }).env?.VITE_API_URL ||
-  'http://localhost:3001';
+  'http://localhost:8080';
+
 
 class ApiClient {
   private client: AxiosInstance;
   private isRefreshing = false;
   private refreshQueue: Array<(token: string) => void> = [];
+  private baseURL = `${API_BASE_URL}/api/v1`;
 
   constructor() {
     this.client = axios.create({
-      baseURL: `${API_BASE_URL}/api/v1`,
+      baseURL: this.baseURL,
       timeout: 15000,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -126,20 +128,13 @@ class ApiClient {
   // AUTH
   // ============================================================
 
-  async login(email: string, password: string) {
-    const { data } = await this.client.post<ApiResponse>('/auth/login', {
-      email,
-      password,
-    });
+  async login(credentials: any) {
+    const { data } = await this.client.post<ApiResponse>('/auth/login', credentials);
     return data;
   }
 
-  async register(name: string, email: string, password: string) {
-    const { data } = await this.client.post<ApiResponse>('/auth/register', {
-      name,
-      email,
-      password,
-    });
+  async register(formData: any) {
+    const { data } = await this.client.post<ApiResponse>('/auth/register', formData);
     return data;
   }
 
@@ -239,14 +234,24 @@ class ApiClient {
   }
 
   // ============================================================
-  // HEALTH
+  // HEALTH & USER
   // ============================================================
+
+  async getMe() {
+    const { data } = await this.client.get('/auth/me');
+    return data;
+  }
+
+  getBaseUrl() {
+    return this.baseURL;
+  }
 
   async health() {
     const { data } = await this.client.get('/health');
     return data;
   }
 }
+
 
 // Singleton
 export const api = new ApiClient();

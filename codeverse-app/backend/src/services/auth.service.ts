@@ -2,9 +2,12 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/db';
+import redis from '../config/redis';
+import config from '../config/env';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-production-secret-key';
-const JWT_EXPIRES_IN = '7d';
+const JWT_SECRET = config.jwtSecret;
+const JWT_EXPIRES_IN = '1h';
+const REFRESH_TOKEN_EXPIRES_IN = '7d';
 
 export class AuthService {
   static async hashPassword(password: string): Promise<string> {
@@ -13,11 +16,16 @@ export class AuthService {
   }
 
   static async comparePasswords(password: string, hash: string): Promise<boolean> {
+    if (!hash) return false;
     return bcrypt.compare(password, hash);
   }
 
   static generateToken(payload: { id: string; email: string; username: string }): string {
     return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  }
+
+  static generateRefreshToken(payload: { id: string }): string {
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRES_IN });
   }
 
   static verifyToken(token: string): any {
@@ -57,4 +65,25 @@ export class AuthService {
   static async updateLastLogin(userId: string) {
     await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [userId]);
   }
+
+  // OTP & Password Reset
+  static async generateOTP(email: string): Promise<string> {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    await redis.set(`otp:${email}`, otp, 'EX', 600); // 10 minutes
+    return otp;
+  }
+
+  static async verifyOTP(email: string, otp: string): Promise<boolean> {
+    const storedOTP = await redis.get(`otp:${email}`);
+    if (storedOTP === otp) {
+      await redis.del(`otp:${email}`);
+      return true;
+    }
+    return false;
+  }
+
+  static async updatePassword(userId: string, passwordHash: string) {
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
+  }
 }
+

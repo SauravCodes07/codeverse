@@ -1,12 +1,10 @@
 import Redis from 'ioredis';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import config from './env';
 
 const redis = new Redis({
-  host: process.env.REDIS_HOST || '127.0.0.1',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
-  password: process.env.REDIS_PASSWORD,
+  host: config.redis.host,
+  port: config.redis.port,
+  password: config.redis.password,
   lazyConnect: true,
   maxRetriesPerRequest: 2,
   retryStrategy: (times) => {
@@ -14,6 +12,7 @@ const redis = new Redis({
     return Math.min(times * 100, 3000);
   },
 });
+
 
 redis.on('error', (err) => {
   console.warn('[Redis Error]', err.message);

@@ -3,7 +3,7 @@ import { motion, useScroll, useTransform, useSpring, useInView, AnimatePresence 
 import { 
   ArrowRight, Code2, Zap, Users, Shield, Cpu, 
   Sparkles, Terminal, Globe, Lock, X, Play, 
-  Github, Layers, MessageSquare, Download, Check
+  GitBranch as Github, Layers, MessageSquare, Download, Check
 } from 'lucide-react';
 import { PageType } from '../types';
 import { Button } from '../components/Button';

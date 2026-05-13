@@ -3,11 +3,12 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import { AuthService } from '../services/auth.service';
 import pool from './db';
+import config from './env';
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'dummy';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'dummy';
-const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || 'dummy';
-const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || 'dummy';
+const GOOGLE_CLIENT_ID = config.oauth.google.id;
+const GOOGLE_CLIENT_SECRET = config.oauth.google.secret;
+const GITHUB_CLIENT_ID = config.oauth.github.id;
+const GITHUB_CLIENT_SECRET = config.oauth.github.secret;
 
 passport.use(new GoogleStrategy({
     clientID: GOOGLE_CLIENT_ID,

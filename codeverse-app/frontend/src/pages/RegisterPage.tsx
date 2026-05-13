@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Mail, Lock, User, ArrowRight, Github, Globe, Shield, Sparkles, Code2, AtSign, Check } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, GitBranch as Github, Globe, Shield, Sparkles, Code2, AtSign, Check } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { PageType } from '../types';
 import { Button } from '../components/Button';
+import { api } from '../lib/api';
 
 interface RegisterPageProps {
   onNavigate?: (page: PageType) => void;
@@ -40,35 +41,29 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/v1/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          username: formData.username,
-          password: formData.password,
-          fullName: formData.fullName,
-        }),
+      const data = await api.register({
+        email: formData.email,
+        username: formData.username,
+        password: formData.password,
+        fullName: formData.fullName,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
+      if (data.error) {
+        throw new Error(data.error);
       }
 
       setAuth(data.user, data.token);
-      addNotification({ type: 'success', message: 'Account created! Welcome to CodeVerse, ' + data.user.full_name });
+      addNotification({ type: 'success', message: 'Account created! Welcome to CodeVerse, ' + (data.user.full_name || data.user.username) });
       onNavigate?.('ide');
     } catch (error: any) {
-      addNotification({ type: 'error', message: error.message });
+      addNotification({ type: 'error', message: error.message || 'Registration failed' });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleOAuth = (provider: 'google' | 'github') => {
-    window.location.href = `http://localhost:3000/api/v1/auth/${provider}`;
+    window.location.href = `${api.getBaseUrl()}/auth/${provider}`;
   };
 
   return (

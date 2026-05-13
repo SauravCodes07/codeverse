@@ -11,75 +11,8 @@ import IDEWorkspace from './pages/IDEWorkspace';
 import { PageType } from './types';
 import { SmoothScroll } from './components/SmoothScroll';
 import { PageTransition } from './components/PageTransition';
-
-// ============================================================
-// NOTIFICATION TOAST
-// ============================================================
-
-const NotificationToast: React.FC = () => {
-  const { notifications, removeNotification } = useAppStore();
-
-  if (notifications.length === 0) return null;
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        top: '20px',
-        right: '20px',
-        zIndex: 9999,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-        pointerEvents: 'none',
-      }}
-    >
-      {notifications.map((n) => {
-        const colors: Record<string, string> = {
-          success: '#10b981',
-          error: '#ef4444',
-          warning: '#f59e0b',
-          info: '#4f7cff',
-        };
-        return (
-          <div
-            key={n.id}
-            className="animate-slide-in-right"
-            style={{
-              padding: '12px 20px',
-              background: 'rgba(22, 27, 44, 0.95)',
-              backdropFilter: 'blur(20px)',
-              border: `1px solid ${colors[n.type]}40`,
-              borderLeft: `3px solid ${colors[n.type]}`,
-              borderRadius: '10px',
-              color: '#e2e8f0',
-              fontSize: '14px',
-              maxWidth: '360px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-              pointerEvents: 'auto',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-            }}
-            onClick={() => removeNotification(n.id)}
-          >
-            <span style={{ fontSize: '16px' }}>
-              {n.type === 'success'
-                ? '✓'
-                : n.type === 'error'
-                ? '✕'
-                : n.type === 'warning'
-                ? '⚠'
-                : 'ℹ'}
-            </span>
-            {n.message}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
+import { api } from './lib/api';
+import { NotificationToast } from './components/NotificationToast';
 
 // ============================================================
 // APP
@@ -95,27 +28,31 @@ function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
     if (token) {
-      // We need to fetch the user profile using the token
-      // For now, we'll just set it and the store should handle the rest or we fetch 'me'
-      fetch('http://localhost:3000/api/v1/auth/me', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      .then(res => res.json())
-      .then(user => {
-        if (user && !user.error) {
-          useAppStore.getState().setAuth(user, token);
+      // Set the token in the store first so subsequent requests use it
+      useAppStore.getState().setAuth(null, token); 
+      
+      api.getMe()
+        .then(user => {
+          if (user && !user.error) {
+            useAppStore.getState().setAuth(user, token);
+            useAppStore.getState().addNotification({ 
+              type: 'success', 
+              message: `Welcome, ${user.full_name || user.username}!` 
+            });
+            setPage('ide');
+          }
+        })
+        .catch(err => {
+          console.error('OAuth profile fetch failed', err);
           useAppStore.getState().addNotification({ 
-            type: 'success', 
-            message: `Welcome, ${user.full_name}!` 
+            type: 'error', 
+            message: 'Authentication failed. Please try again.' 
           });
-          setPage('ide');
-        }
-      })
-      .catch(err => console.error('OAuth profile fetch failed', err))
-      .finally(() => {
-        // Clean the URL
-        window.history.replaceState({}, document.title, "/");
-      });
+        })
+        .finally(() => {
+          // Clean the URL
+          window.history.replaceState({}, document.title, "/");
+        });
     }
   }, []);
 

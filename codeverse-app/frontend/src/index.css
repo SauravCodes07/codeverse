@@ -1,19 +1,9 @@
 @tailwind base;
 @tailwind components;
-@tailwind utilities;
-
 /* ============================================================
    DESIGN TOKENS
    ============================================================ */
 :root {
-  --color-bg-primary: #0a0e1a;
-  --color-bg-secondary: #0d1117;
-  --color-bg-surface: #161b2c;
-  --color-bg-elevated: #1e2433;
-  --color-border: rgba(99, 120, 200, 0.12);
-  --color-border-hover: rgba(99, 120, 200, 0.3);
-  --color-accent-cyan: #00d4ff;
-  --color-accent-blue: #4f7cff;
   --color-accent-purple: #a855f7;
   --color-accent-green: #10b981;
   --color-text-primary: #e2e8f0;

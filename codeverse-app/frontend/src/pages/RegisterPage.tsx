@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Mail, Lock, User, ArrowRight, GitBranch, Globe, Shield, Sparkles, Code2, AtSign, Check } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, Github, Globe, Shield, Sparkles, Code2, AtSign, Check } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
-
 import { PageType } from '../types';
+import { Button } from '../components/Button';
 
 interface RegisterPageProps {
   onNavigate?: (page: PageType) => void;
@@ -67,16 +67,20 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
     }
   };
 
+  const handleOAuth = (provider: 'google' | 'github') => {
+    window.location.href = `http://localhost:3000/api/v1/auth/${provider}`;
+  };
+
   return (
     <div className="min-h-screen bg-[#050810] text-slate-200 selection:bg-cyan-500/30 flex items-center justify-center px-6 relative overflow-hidden">
       {/* Background elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="bg-grid absolute inset-0 opacity-20" />
-        <div className="blob blob-cyan top-[-10%] right-[-10%] scale-150 animate-pulse-glow" />
-        <div className="blob blob-purple bottom-[-10%] left-[-10%] scale-150 animate-pulse-glow delay-500" />
+        <div className="blob blob-cyan top-[-10%] right-[-10%] scale-150" />
+        <div className="blob blob-purple bottom-[-10%] left-[-10%] scale-150" />
       </div>
 
-      <div className="relative w-full max-w-[480px] animate-slide-up py-10">
+      <div className="relative w-full max-w-[480px] py-10">
         {/* Logo */}
         <div 
           onClick={() => onNavigate?.('landing')}
@@ -94,13 +98,11 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
         <div className="glass-card rounded-[32px] p-8 border-white/10 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-blue-600" />
           
-          {/* Header */}
-          <div className="mb-6">
+          <div className="mb-6 text-center">
             <h1 className="text-2xl font-bold text-white mb-1 tracking-tight">Create your account</h1>
             <p className="text-slate-400 text-sm">Join the next generation of developers.</p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -217,26 +219,17 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
               </label>
             </div>
 
-            <button
+            <Button
               type="submit"
-              disabled={isLoading || !agreeTerms || !allChecks || !passwordsMatch}
-              className="btn-primary w-full py-3.5 rounded-xl text-sm shadow-xl shadow-cyan-500/20 group mt-2"
+              disabled={!agreeTerms || !allChecks || !passwordsMatch}
+              isLoading={isLoading}
+              className="w-full py-3.5 text-sm mt-2"
+              rightIcon={<ArrowRight className="w-4 h-4" />}
             >
-              {isLoading ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Processing...</span>
-                </div>
-              ) : (
-                <>
-                  Create Free Account
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </>
-              )}
-            </button>
+              Create Free Account
+            </Button>
           </form>
 
-          {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-white/5" />
@@ -246,20 +239,26 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          {/* OAuth Buttons */}
           <div className="grid grid-cols-2 gap-3">
-            <button className="flex items-center justify-center gap-2 py-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all text-xs font-bold text-white">
-              <GitBranch className="w-4 h-4" />
+            <Button 
+              variant="secondary" 
+              onClick={() => handleOAuth('github')}
+              leftIcon={<Github className="w-4 h-4" />}
+              size="sm"
+            >
               GitHub
-            </button>
-            <button className="flex items-center justify-center gap-2 py-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all text-xs font-bold text-white">
-              <Globe className="w-4 h-4" />
+            </Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => handleOAuth('google')}
+              leftIcon={<Globe className="w-4 h-4" />}
+              size="sm"
+            >
               Google
-            </button>
+            </Button>
           </div>
         </div>
 
-        {/* Footer */}
         <p className="mt-6 text-center text-slate-500 text-sm">
           Already a citizen?{' '}
           <button
@@ -269,14 +268,6 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
             Sign in
           </button>
         </p>
-
-        <div className="mt-10 flex items-center justify-center gap-4 opacity-30 grayscale">
-          <Shield className="w-4 h-4" />
-          <div className="h-3 w-px bg-slate-700" />
-          <Sparkles className="w-4 h-4" />
-          <div className="h-3 w-px bg-slate-700" />
-          <Lock className="w-4 h-4" />
-        </div>
       </div>
     </div>
   );

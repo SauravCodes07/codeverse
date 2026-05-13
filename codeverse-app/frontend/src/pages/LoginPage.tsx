@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Mail, Lock, ArrowRight, GitBranch, Globe, Shield, Sparkles, Code2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Github, Globe, Shield, Sparkles, Code2 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
-
 import { PageType } from '../types';
+import { Button } from '../components/Button';
 
 interface LoginPageProps {
   onNavigate?: (page: PageType) => void;
@@ -41,16 +41,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
     }
   };
 
+  const handleOAuth = (provider: 'google' | 'github') => {
+    window.location.href = `http://localhost:3000/api/v1/auth/${provider}`;
+  };
+
   return (
     <div className="min-h-screen bg-[#050810] text-slate-200 selection:bg-cyan-500/30 flex items-center justify-center px-6 relative overflow-hidden">
       {/* Background elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="bg-grid absolute inset-0 opacity-20" />
-        <div className="blob blob-cyan top-[-10%] left-[-10%] scale-150 animate-pulse-glow" />
-        <div className="blob blob-purple bottom-[-10%] right-[-10%] scale-150 animate-pulse-glow delay-500" />
+        <div className="blob blob-cyan top-[-10%] left-[-10%] scale-150" />
+        <div className="blob blob-purple bottom-[-10%] right-[-10%] scale-150" />
       </div>
 
-      <div className="relative w-full max-w-[440px] animate-slide-up">
+      <div className="relative w-full max-w-[440px]">
         {/* Logo */}
         <div 
           onClick={() => onNavigate?.('landing')}
@@ -68,13 +72,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
         <div className="glass-card rounded-[32px] p-10 border-white/10 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-blue-600" />
           
-          {/* Header */}
-          <div className="mb-8">
+          <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Welcome Back</h1>
             <p className="text-slate-400">Enter your credentials to access your studio.</p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-300 ml-1">Email Address</label>
@@ -115,26 +117,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
               </div>
             </div>
 
-            <button
+            <Button
               type="submit"
-              disabled={isLoading}
-              className="btn-primary w-full py-4 rounded-2xl text-base shadow-xl shadow-cyan-500/20 group"
+              isLoading={isLoading}
+              className="w-full py-4 text-base"
+              rightIcon={<ArrowRight className="w-5 h-5" />}
             >
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Authenticating...</span>
-                </div>
-              ) : (
-                <>
-                  Sign In to CodeVerse
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </>
-              )}
-            </button>
+              Sign In to CodeVerse
+            </Button>
           </form>
 
-          {/* Divider */}
           <div className="relative my-8">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-white/5" />
@@ -144,20 +136,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          {/* OAuth Buttons */}
           <div className="grid grid-cols-2 gap-4">
-            <button className="flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all text-sm font-bold">
-              <GitBranch className="w-5 h-5" />
+            <Button 
+              variant="secondary" 
+              onClick={() => handleOAuth('github')}
+              leftIcon={<Github className="w-5 h-5" />}
+            >
               GitHub
-            </button>
-            <button className="flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all text-sm font-bold">
-              <Globe className="w-5 h-5" />
+            </Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => handleOAuth('google')}
+              leftIcon={<Globe className="w-5 h-5" />}
+            >
               Google
-            </button>
+            </Button>
           </div>
         </div>
 
-        {/* Footer */}
         <p className="mt-8 text-center text-slate-500 text-sm">
           New to the verse?{' '}
           <button
@@ -167,14 +163,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
             Create an account
           </button>
         </p>
-
-        <div className="mt-12 flex items-center justify-center gap-6 opacity-40">
-          <Shield className="w-5 h-5" />
-          <div className="h-4 w-px bg-slate-700" />
-          <Sparkles className="w-5 h-5" />
-          <div className="h-4 w-px bg-slate-700" />
-          <Lock className="w-5 h-5" />
-        </div>
       </div>
     </div>
   );

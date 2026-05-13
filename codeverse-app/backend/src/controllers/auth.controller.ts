@@ -124,4 +124,29 @@ export class AuthController {
       return;
     }
   }
+
+  static async oauthSuccess(req: Request, res: Response) {
+    try {
+      const user = (req as any).user;
+      if (!user) {
+        res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=auth_failed`);
+        return;
+      }
+
+      await AuthService.updateLastLogin(user.id);
+
+      const token = AuthService.generateToken({
+        id: user.id,
+        email: user.email,
+        username: user.username,
+      });
+
+      // Redirect back to frontend with token
+      // In a real production app, you might use a secure cookie instead
+      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/?token=${token}`);
+    } catch (error) {
+      console.error('[OAuth Success Error]', error);
+      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=server_error`);
+    }
+  }
 }

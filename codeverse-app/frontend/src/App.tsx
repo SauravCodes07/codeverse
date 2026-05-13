@@ -9,6 +9,8 @@ import OTPPage from './pages/OTPPage';
 import IDEWorkspace from './pages/IDEWorkspace';
 
 import { PageType } from './types';
+import { SmoothScroll } from './components/SmoothScroll';
+import { PageTransition } from './components/PageTransition';
 
 // ============================================================
 // NOTIFICATION TOAST
@@ -87,6 +89,35 @@ function App() {
   const { isAuthenticated } = useAppStore();
   const [page, setPage] = useState<PageType>('landing');
   const [pendingEmail, setPendingEmail] = useState('');
+
+  // Handle OAuth Token from URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    if (token) {
+      // We need to fetch the user profile using the token
+      // For now, we'll just set it and the store should handle the rest or we fetch 'me'
+      fetch('http://localhost:3000/api/v1/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(user => {
+        if (user && !user.error) {
+          useAppStore.getState().setAuth(user, token);
+          useAppStore.getState().addNotification({ 
+            type: 'success', 
+            message: `Welcome, ${user.full_name}!` 
+          });
+          setPage('ide');
+        }
+      })
+      .catch(err => console.error('OAuth profile fetch failed', err))
+      .finally(() => {
+        // Clean the URL
+        window.history.replaceState({}, document.title, "/");
+      });
+    }
+  }, []);
 
   // If user is already authenticated, send to IDE
   useEffect(() => {
@@ -169,7 +200,11 @@ function App() {
             </div>
           }
         >
-          {renderPage()}
+          <SmoothScroll>
+            <PageTransition pageKey={page}>
+              {renderPage()}
+            </PageTransition>
+          </SmoothScroll>
         </ErrorBoundary>
         <NotificationToast />
       </div>
